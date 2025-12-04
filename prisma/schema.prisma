@@ -1,29 +1,199 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
-  // output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "mongodb"
-  url      = env("DATABASE_URL")
 }
 
+// === USER MANAGEMENT ===
 model User {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  email      String    @unique
+  password   String
+  name       String
+  role       String    @default("user") // user, admin, master
+  avatar     String?
+  divisionId String?   @db.ObjectId
+  division   Division? @relation(fields: [divisionId], references: [id])
+  status     String    @default("pending") // pending, active, inactive
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // Relations
+  invitations        Invitation[]    @relation("InvitationUser")
+  invitationsCreated Invitation[]    @relation("InvitationCreator")
+  tasksAssigned      Task[]          @relation("TaskAssignee")
+  tasksCreated       Task[]          @relation("TaskCreator")
+  issuesAssigned     Issue[]         @relation("IssueAssignee")
+  issuesCreated      Issue[]         @relation("IssueCreator")
+  comments           Comment[]
+  calendarEvents     CalendarEvent[]
+  boardAccess        BoardAccess[]
+
+  @@map("users")
+}
+
+model Division {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  email     String   @unique
-  password  String
-  name      String
-  role      String   @default("admin")
-  division  String?
-  status    String   @default("active")
+  name      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("users")
+  users     User[]
+  boards    Board[]
+  calendars Calendar[]
+
+  @@map("divisions")
+}
+
+// === INVITATION SYSTEM ===
+model Invitation {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  email       String
+  userId      String?  @db.ObjectId
+  user        User?    @relation("InvitationUser", fields: [userId], references: [id])
+  createdById String   @db.ObjectId
+  createdBy   User     @relation("InvitationCreator", fields: [createdById], references: [id])
+  token       String   @unique
+  status      String   @default("pending") // pending, accepted, expired
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@map("invitations")
+}
+
+// === BOARD SYSTEM ===
+model Board {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  type        String // general, division, personal
+  divisionId  String?   @db.ObjectId
+  division    Division? @relation(fields: [divisionId], references: [id])
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  boardAccess BoardAccess[]
+  tasks       Task[]
+  issues      Issue[]
+  calendars   Calendar[]
+
+  @@map("boards")
+}
+
+model BoardAccess {
+  id      String  @id @default(auto()) @map("_id") @db.ObjectId
+  boardId String  @db.ObjectId
+  board   Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  userId  String  @db.ObjectId
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canEdit Boolean @default(false)
+
+  @@unique([boardId, userId])
+  @@map("board_access")
+}
+
+// === TASK LIST ===
+model Task {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  boardId     String  @db.ObjectId
+  board       Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      String  @default("todo") // todo, in_progress, in_review, done
+  priority    String? // low, medium, high, urgent
+
+  assignedToId String? @db.ObjectId
+  assignedTo   User?   @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdById  String  @db.ObjectId
+  createdBy    User    @relation("TaskCreator", fields: [createdById], references: [id])
+
+  startDate   DateTime  @default(now()) // Created time
+  dueDate     DateTime?
+  attachments String[] // URLs to attachments
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tasks")
+}
+
+// === ISSUES TRACKER / PROBLEM REPORT ===
+model Issue {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  boardId     String  @db.ObjectId
+  board       Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      String  @default("todo") // todo, in_progress, in_review, done
+  priority    String? // low, medium, high, urgent
+
+  assignedToId String? @db.ObjectId
+  assignedTo   User?   @relation("IssueAssignee", fields: [assignedToId], references: [id])
+  createdById  String  @db.ObjectId
+  createdBy    User    @relation("IssueCreator", fields: [createdById], references: [id])
+
+  startDate   DateTime  @default(now())
+  dueDate     DateTime?
+  attachments String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comments Comment[]
+
+  @@map("issues")
+}
+
+model Comment {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  issueId String @db.ObjectId
+  issue   Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  userId  String @db.ObjectId
+  user    User   @relation(fields: [userId], references: [id])
+  content String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("comments")
+}
+
+// === CALENDAR SYSTEM ===
+model Calendar {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  type       String // general, team, division
+  boardId    String?   @db.ObjectId
+  board      Board?    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  divisionId String?   @db.ObjectId
+  division   Division? @relation(fields: [divisionId], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  events CalendarEvent[]
+
+  @@map("calendars")
+}
+
+model CalendarEvent {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  calendarId  String   @db.ObjectId
+  calendar    Calendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  tags        String[] // Array of tags
+  createdById String   @db.ObjectId
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("calendar_events")
 }
