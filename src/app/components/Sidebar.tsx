@@ -17,9 +17,8 @@ export default function Sidebar({ selectedMenu, onMenuSelect }: SidebarProps) {
 
   const mainMenuItems = [
     { name: "Home", icon: "home", path: "/dashboard" },
-    { name: "Boards", icon: "board", path: "/dashboard/boards" },
     { name: "Tasks", icon: "tasks", path: "/dashboard/tasks" },
-    { name: "Issues", icon: "issues", path: "/dashboard/issues" },
+    { name: "Issues Tracker", icon: "issues", path: "/dashboard/issues" },
     { name: "Calendar", icon: "calendar", path: "/dashboard/calendar" },
   ];
 

@@ -59,10 +59,27 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, description, priority, assignedToId } = body;
+    const { title, description, priority, assignedToId, boardId } = body;
 
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
+    }
+
+    // Create a default board if none exists (temporary solution)
+    let defaultBoardId = boardId;
+    if (!defaultBoardId) {
+      const defaultBoard = await prisma.board.findFirst();
+      if (!defaultBoard) {
+        const newBoard = await prisma.board.create({
+          data: {
+            name: "Default Board",
+            type: "general",
+          },
+        });
+        defaultBoardId = newBoard.id;
+      } else {
+        defaultBoardId = defaultBoard.id;
+      }
     }
 
     const issue = await prisma.issue.create({
@@ -70,7 +87,8 @@ export async function POST(req: NextRequest) {
         title,
         description,
         priority: priority || "medium",
-        status: "open",
+        status: "not_started",
+        boardId: defaultBoardId,
         assignedToId,
         createdById: session.user.id,
       },

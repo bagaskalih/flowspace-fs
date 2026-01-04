@@ -19,6 +19,15 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
+    console.log(
+      "Available divisions:",
+      divisions.map((d) => ({
+        id: d.id,
+        name: d.name,
+        userCount: d._count.users,
+      }))
+    );
+
     return NextResponse.json(divisions);
   } catch (error) {
     console.error("Get divisions error:", error);
@@ -43,7 +52,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, description } = body;
+    const { name } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
