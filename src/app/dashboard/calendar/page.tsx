@@ -983,7 +983,7 @@ export default function CalendarPage() {
                   {selectedEvent.tag.split(",").map((tag, index) => (
                     <span
                       key={index}
-                      className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg text-sm font-medium shadow-md"
+                      className="px-4 py-2 bg-linear-to-r from-orange-500 to-orange-600 text-white rounded-lg text-sm font-medium shadow-md"
                     >
                       {tag.trim()}
                     </span>
@@ -996,7 +996,7 @@ export default function CalendarPage() {
             <div className="pt-4 flex gap-3">
               <button
                 onClick={() => handleEditEvent(selectedEvent)}
-                className="flex-1 px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg transition-all font-medium shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                className="flex-1 px-5 py-3 bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg transition-all font-medium shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center gap-2"
               >
                 <svg
                   className="w-5 h-5"
@@ -1018,7 +1018,7 @@ export default function CalendarPage() {
                   setShowEventModal(false);
                   setSelectedEvent(null);
                 }}
-                className="flex-1 px-5 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg transition-all font-medium shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                className="flex-1 px-5 py-3 bg-linear-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg transition-all font-medium shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
               >
                 Close
               </button>

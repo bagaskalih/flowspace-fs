@@ -605,7 +605,7 @@ export default function IssuesPage() {
                   selectedIssue.comments.length > 0 ? (
                     selectedIssue.comments.map((comment) => (
                       <div key={comment.id} className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#CD5B43] flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-[#CD5B43] flex items-center justify-center text-white font-semibold text-sm shrink-0">
                           {comment.user.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1">
@@ -800,7 +800,7 @@ export default function IssuesPage() {
             </button>
             <button
               type="submit"
-              className="flex-1 px-5 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg transition-all font-medium shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+              className="flex-1 px-5 py-3 bg-linear-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg transition-all font-medium shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
             >
               Create Issue
             </button>
