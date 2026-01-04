@@ -40,15 +40,15 @@ export default function Modal({
       onClick={onClose}
     >
       <div
-        className="bg-[#2a4a48] rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <h2 className="text-xl font-semibold text-white">{title}</h2>
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+            className="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
