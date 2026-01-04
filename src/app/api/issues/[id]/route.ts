@@ -80,8 +80,8 @@ export async function PUT(
           description !== undefined ? description : issue.description,
         status: status !== undefined ? status : issue.status,
         priority: priority !== undefined ? priority : issue.priority,
-        assignedToId: assignedToId !== undefined ? assignedToId : issue.assignedToId,
-        resolvedAt: status === "resolved" ? new Date() : null,
+        assignedToId:
+          assignedToId !== undefined ? assignedToId : issue.assignedToId,
       },
       include: {
         createdBy: {
@@ -89,6 +89,9 @@ export async function PUT(
         },
         assignedTo: {
           select: { id: true, name: true, email: true, avatar: true },
+        },
+        _count: {
+          select: { comments: true },
         },
       },
     });

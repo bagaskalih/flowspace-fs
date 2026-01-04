@@ -3,14 +3,18 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "../../components/Sidebar";
+import Modal from "../../components/Modal";
+import { ChevronDown, Plus } from "lucide-react";
 
 interface Comment {
   id: string;
-  message: string;
+  content: string;
   createdAt: string;
   user: {
     id: string;
     name: string;
+    email?: string;
+    avatar?: string;
   };
 }
 
@@ -23,14 +27,38 @@ interface Issue {
   assignedTo: {
     id: string;
     name: string;
+    email?: string;
+    avatar?: string;
   } | null;
-  dueDate: string;
+  createdBy: {
+    id: string;
+    name: string;
+    email?: string;
+    avatar?: string;
+  };
+  dueDate?: string;
   _count?: {
     comments: number;
   };
   comments?: Comment[];
   createdAt: string;
+  updatedAt: string;
 }
+
+const statusOptions = [
+  { value: "not_started", label: "Not Started", color: "bg-gray-500" },
+  { value: "in_progress", label: "In Progress", color: "bg-blue-500" },
+  { value: "in_review", label: "In Review", color: "bg-yellow-500" },
+  { value: "done", label: "Done", color: "bg-green-500" },
+  { value: "closed", label: "Closed", color: "bg-red-500" },
+];
+
+const priorityOptions = [
+  { value: "low", label: "Low", color: "bg-green-500" },
+  { value: "medium", label: "Medium", color: "bg-yellow-500" },
+  { value: "high", label: "High", color: "bg-orange-500" },
+  { value: "urgent", label: "Urgent", color: "bg-red-500" },
+];
 
 export default function IssuesPage() {
   const router = useRouter();
@@ -39,142 +67,229 @@ export default function IssuesPage() {
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [loading, setLoading] = useState(true);
   const [messageInput, setMessageInput] = useState("");
+  const [users, setUsers] = useState<any[]>([]);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+
+  // Filter states
+  const [hideClosed, setHideClosed] = useState(true);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterAssignee, setFilterAssignee] = useState<string>("all");
+
+  // Create issue modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    title: "",
+    description: "",
+    priority: "medium",
+    assignedToId: "",
+  });
 
   useEffect(() => {
     fetchIssues();
+    fetchUsers();
   }, []);
 
   const fetchIssues = async () => {
-    // Use dummy data for testing since backend is not ready
-    useDummyData();
-    setLoading(false);
-    
-    /* Uncomment when backend is ready:
     try {
       setLoading(true);
       const res = await fetch("/api/issues");
       if (res.ok) {
         const data = await res.json();
         setIssues(data);
-      } else {
-        useDummyData();
       }
     } catch (error) {
       console.error("Failed to fetch issues:", error);
-      useDummyData();
     } finally {
       setLoading(false);
     }
-    */
   };
 
-  const useDummyData = () => {
-    const dummyIssues: Issue[] = [
-      {
-        id: "1",
-        title: "Implement user authentication",
-        description: "Set up secure user authentication system with JWT tokens",
-        status: "In Progress",
-        priority: "High",
-        assignedTo: { id: "1", name: "John Doe" },
-        dueDate: "30/12/2024",
-        _count: { comments: 2 },
-        comments: [
-          {
-            id: "1",
-            message: "Lorem ipsum dolor sit amet",
-            createdAt: "2024-12-30T19:20:00Z",
-            user: { id: "1", name: "John Doe" },
-          },
-          {
-            id: "2",
-            message: "Lorem ipsum dolor sit amet",
-            createdAt: "2024-12-30T18:20:00Z",
-            user: { id: "2", name: "Jane Smith" },
-          },
-        ],
-        createdAt: "2024-12-25T10:00:00Z",
-      },
-      {
-        id: "2",
-        title: "Fix critical bug in payment module",
-        description: "Payment processing failing for certain card types",
-        status: "High",
-        priority: "High",
-        assignedTo: { id: "2", name: "Jane Smith" },
-        dueDate: "27/12/2024",
-        _count: { comments: 2 },
-        comments: [
-          {
-            id: "3",
-            message: "Investigating the issue",
-            createdAt: "2024-12-26T14:30:00Z",
-            user: { id: "2", name: "Jane Smith" },
-          },
-          {
-            id: "4",
-            message: "Found the root cause",
-            createdAt: "2024-12-26T16:00:00Z",
-            user: { id: "2", name: "Jane Smith" },
-          },
-        ],
-        createdAt: "2024-12-20T14:30:00Z",
-      },
-    ];
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch("/api/auth/users");
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data.filter((u: any) => u.status === "active"));
+      }
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+    }
+  };
 
-    setIssues(dummyIssues);
+  const fetchIssueDetails = async (issueId: string) => {
+    try {
+      const res = await fetch(`/api/issues/${issueId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedIssue(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch issue details:", error);
+    }
+  };
+
+  const handleUpdateIssue = async (
+    issueId: string,
+    updates: Partial<Issue> | { assignedToId?: string | null }
+  ) => {
+    try {
+      const res = await fetch(`/api/issues/${issueId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (res.ok) {
+        const updatedIssue = await res.json();
+
+        // Preserve existing comments if they exist
+        const currentIssue = issues.find((issue) => issue.id === issueId);
+        if (currentIssue?.comments) {
+          updatedIssue.comments = currentIssue.comments;
+        }
+
+        setIssues(
+          issues.map((issue) => (issue.id === issueId ? updatedIssue : issue))
+        );
+        if (selectedIssue?.id === issueId) {
+          // Preserve comments from selectedIssue
+          if (selectedIssue.comments) {
+            updatedIssue.comments = selectedIssue.comments;
+          }
+          setSelectedIssue(updatedIssue);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to update issue:", error);
+    }
+  };
+
+  const handleCreateIssue = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!createForm.title.trim()) return;
+
+    try {
+      const res = await fetch("/api/issues", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: createForm.title,
+          description: createForm.description || null,
+          priority: createForm.priority,
+          assignedToId: createForm.assignedToId || null,
+        }),
+      });
+
+      if (res.ok) {
+        const newIssue = await res.json();
+        setIssues([newIssue, ...issues]);
+        setShowCreateModal(false);
+        setCreateForm({
+          title: "",
+          description: "",
+          priority: "medium",
+          assignedToId: "",
+        });
+        setSelectedIssue(newIssue);
+      } else {
+        const error = await res.json();
+        alert(error.error || "Failed to create issue");
+      }
+    } catch (error) {
+      console.error("Failed to create issue:", error);
+      alert("Failed to create issue");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!messageInput.trim() || !selectedIssue) return;
 
-    // Add message to dummy data
-    const newComment: Comment = {
-      id: Date.now().toString(),
-      message: messageInput,
-      createdAt: new Date().toISOString(),
-      user: { id: "current", name: "Current User" },
-    };
-
-    const updatedIssue = {
-      ...selectedIssue,
-      comments: [...(selectedIssue.comments || []), newComment],
-      _count: {
-        comments: (selectedIssue._count?.comments || 0) + 1,
-      },
-    };
-
-    setSelectedIssue(updatedIssue);
-    setIssues(issues.map(issue => 
-      issue.id === selectedIssue.id ? updatedIssue : issue
-    ));
-    setMessageInput("");
-
-    /* Uncomment when backend is ready:
     try {
       const res = await fetch(`/api/issues/${selectedIssue.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: messageInput }),
+        body: JSON.stringify({ content: messageInput }),
       });
 
       if (res.ok) {
-        const comment = await res.json();
-        // Update local state
+        const newComment = await res.json();
+
+        const updatedIssue = {
+          ...selectedIssue,
+          comments: [...(selectedIssue.comments || []), newComment],
+          _count: {
+            comments: (selectedIssue._count?.comments || 0) + 1,
+          },
+        };
+
+        setSelectedIssue(updatedIssue);
+        setIssues(
+          issues.map((issue) =>
+            issue.id === selectedIssue.id ? updatedIssue : issue
+          )
+        );
         setMessageInput("");
       }
     } catch (err) {
       console.error("Failed to post comment:", err);
     }
-    */
   };
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    const option = statusOptions.find((s) => s.value === status);
+    return option?.color || "bg-gray-500";
+  };
+
+  const getPriorityColor = (priority: string) => {
+    const option = priorityOptions.find((p) => p.value === priority);
+    return option?.color || "bg-gray-500";
+  };
+
+  const getStatusLabel = (status: string) => {
+    const option = statusOptions.find((s) => s.value === status);
+    return option?.label || status;
+  };
+
+  const getPriorityLabel = (priority: string) => {
+    const option = priorityOptions.find((p) => p.value === priority);
+    return option?.label || priority;
+  };
+
+  // Filter issues based on filter states
+  const filteredIssues = issues.filter((issue) => {
+    if (hideClosed && issue.status === "closed") return false;
+    if (filterStatus !== "all" && issue.status !== filterStatus) return false;
+    if (filterPriority !== "all" && issue.priority !== filterPriority)
+      return false;
+    if (filterAssignee !== "all") {
+      if (filterAssignee === "unassigned" && issue.assignedTo) return false;
+      if (
+        filterAssignee !== "unassigned" &&
+        issue.assignedTo?.id !== filterAssignee
+      )
+        return false;
+    }
+    return true;
+  });
 
   if (loading) {
     return (
@@ -192,32 +307,111 @@ export default function IssuesPage() {
         {/* Left Panel - Issues List */}
         <div className="w-[450px] flex flex-col">
           <div className="bg-[#2a5a55] rounded-lg p-6 flex-1 flex flex-col">
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-white mb-2">
-                Issues & Problems
-              </h2>
-              <p className="text-sm text-gray-300">
-                {issues.length} active issues
-              </p>
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-white mb-2">
+                  Issues & Problems
+                </h2>
+                <p className="text-sm text-gray-300">
+                  {filteredIssues.length} of {issues.length} issues
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="bg-orange-500 hover:bg-orange-600 text-white rounded-lg py-2 px-4 flex items-center gap-2 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                New Issue
+              </button>
             </div>
 
-            <div className="space-y-1 flex-1 overflow-y-auto">
-              {issues.map((issue) => (
+            {/* Filters */}
+            <div className="mb-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hideClosed}
+                    onChange={(e) => setHideClosed(e.target.checked)}
+                    className="w-4 h-4 rounded border-[#2a5a56] bg-[#1a3a38] text-orange-500 focus:ring-2 focus:ring-orange-400 cursor-pointer"
+                  />
+                  Hide Closed Issues
+                </label>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="relative">
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-[#1a3a38] border border-[#2a5a56] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 appearance-none cursor-pointer"
+                  >
+                    <option value="all">All Status</option>
+                    {statusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-white pointer-events-none" />
+                </div>
+
+                <div className="relative">
+                  <select
+                    value={filterPriority}
+                    onChange={(e) => setFilterPriority(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-[#1a3a38] border border-[#2a5a56] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 appearance-none cursor-pointer"
+                  >
+                    <option value="all">All Priority</option>
+                    {priorityOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-white pointer-events-none" />
+                </div>
+
+                <div className="relative">
+                  <select
+                    value={filterAssignee}
+                    onChange={(e) => setFilterAssignee(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-[#1a3a38] border border-[#2a5a56] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 appearance-none cursor-pointer"
+                  >
+                    <option value="all">All Users</option>
+                    <option value="unassigned">Unassigned</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-white pointer-events-none" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 flex-1 overflow-y-auto">
+              {filteredIssues.map((issue) => (
                 <div
                   key={issue.id}
-                  onClick={() => setSelectedIssue(issue)}
-                  className={`p-4 cursor-pointer transition-all rounded-lg ${
+                  onClick={() => fetchIssueDetails(issue.id)}
+                  className={`p-4 cursor-pointer transition-all rounded-lg border ${
                     selectedIssue?.id === issue.id
-                      ? "outline outline-2 outline-[#CD5B43] outline-offset-[-2px] bg-[#2a5a55]/30"
-                      : "hover:bg-[#2a5a55]/20"
+                      ? "border-[#CD5B43] bg-[#1a3a38]/50"
+                      : "border-transparent hover:border-[#3a5a55] hover:bg-[#1a3a38]/30"
                   }`}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="text-white font-medium flex-1 pr-3">
                       {issue.title}
                     </h3>
-                    <span className="px-2 py-1 bg-[#CD5B43] text-white text-xs rounded-full whitespace-nowrap">
-                      {issue.priority}
+                    <span
+                      className={`px-2 py-1 ${getPriorityColor(
+                        issue.priority
+                      )} text-white text-xs rounded-md whitespace-nowrap font-medium`}
+                    >
+                      {getPriorityLabel(issue.priority)}
                     </span>
                   </div>
 
@@ -225,24 +419,22 @@ export default function IssuesPage() {
                     {issue.description}
                   </p>
 
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                  <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2 py-0.5 ${getStatusColor(
+                          issue.status
+                        )} text-white rounded`}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                        />
-                      </svg>
-                      {issue.dueDate}
+                        {getStatusLabel(issue.status)}
+                      </span>
+                      <span>by {issue.createdBy.name}</span>
                     </div>
-                    <div className="flex items-center gap-1 text-sm text-gray-400">
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>{formatDate(issue.createdAt)}</span>
+                    <div className="flex items-center gap-1">
                       <svg
                         className="w-4 h-4"
                         fill="none"
@@ -275,8 +467,12 @@ export default function IssuesPage() {
                   <h2 className="text-2xl font-semibold text-white flex-1">
                     {selectedIssue.title}
                   </h2>
-                  <span className="px-3 py-1 bg-[#CD5B43] text-white text-sm rounded-full">
-                    {selectedIssue.priority}
+                  <span
+                    className={`px-3 py-1 ${getPriorityColor(
+                      selectedIssue.priority
+                    )} text-white text-sm rounded-md font-medium`}
+                  >
+                    {getPriorityLabel(selectedIssue.priority)}
                   </span>
                 </div>
                 <p className="text-gray-300 mb-4">
@@ -284,23 +480,114 @@ export default function IssuesPage() {
                 </p>
 
                 {/* Issue Metadata */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
-                    <p className="text-sm text-gray-400 mb-1">Status</p>
+                    <p className="text-sm text-gray-400 mb-2">Status</p>
+                    <div className="relative">
+                      <select
+                        value={selectedIssue.status}
+                        onChange={(e) =>
+                          handleUpdateIssue(selectedIssue.id, {
+                            status: e.target.value,
+                          })
+                        }
+                        className={`w-full px-3 py-2 ${getStatusColor(
+                          selectedIssue.status
+                        )} text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 appearance-none cursor-pointer font-medium`}
+                      >
+                        {statusOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white pointer-events-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-400 mb-2">Assigned To</p>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={assigneeSearch}
+                        onChange={(e) => setAssigneeSearch(e.target.value)}
+                        onFocus={() => setShowAssigneeDropdown(true)}
+                        placeholder={
+                          selectedIssue.assignedTo?.name ||
+                          "Search or select user..."
+                        }
+                        className="w-full px-3 py-2 bg-[#1a3a38] border border-[#2a5a56] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      />
+                      {showAssigneeDropdown && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => {
+                              setShowAssigneeDropdown(false);
+                              setAssigneeSearch("");
+                            }}
+                          />
+                          <div className="absolute z-20 w-full mt-1 bg-[#1a3a38] border border-[#2a5a56] rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            <div
+                              onClick={() => {
+                                handleUpdateIssue(selectedIssue.id, {
+                                  assignedToId: null,
+                                });
+                                setShowAssigneeDropdown(false);
+                                setAssigneeSearch("");
+                              }}
+                              className="px-3 py-2 hover:bg-[#2a5a55] cursor-pointer text-gray-300 transition-colors"
+                            >
+                              Unassigned
+                            </div>
+                            {users
+                              .filter((user) =>
+                                user.name
+                                  .toLowerCase()
+                                  .includes(assigneeSearch.toLowerCase())
+                              )
+                              .map((user) => (
+                                <div
+                                  key={user.id}
+                                  onClick={() => {
+                                    handleUpdateIssue(selectedIssue.id, {
+                                      assignedToId: user.id,
+                                    });
+                                    setShowAssigneeDropdown(false);
+                                    setAssigneeSearch("");
+                                  }}
+                                  className={`px-3 py-2 hover:bg-[#2a5a55] cursor-pointer transition-colors ${
+                                    selectedIssue.assignedTo?.id === user.id
+                                      ? "bg-[#2a5a55] text-orange-400"
+                                      : "text-white"
+                                  }`}
+                                >
+                                  {user.name}
+                                  {user.email && (
+                                    <span className="text-xs text-gray-400 ml-2">
+                                      ({user.email})
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-400">Created by</p>
                     <p className="text-white font-medium">
-                      {selectedIssue.status}
+                      {selectedIssue.createdBy.name}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-400 mb-1">Assigned To</p>
+                    <p className="text-gray-400">Created at</p>
                     <p className="text-white font-medium">
-                      {selectedIssue.assignedTo?.name || "Unassigned"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400 mb-1">Due Date</p>
-                    <p className="text-white font-medium">
-                      {selectedIssue.dueDate}
+                      {formatDate(selectedIssue.createdAt)}
                     </p>
                   </div>
                 </div>
@@ -314,29 +601,35 @@ export default function IssuesPage() {
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto mb-4 space-y-3">
-                  {selectedIssue.comments?.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className={`flex ${
-                        comment.user.name === "Current User"
-                          ? "justify-end"
-                          : "justify-start"
-                      }`}
-                    >
-                      <div
-                        className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                          comment.user.name === "Current User"
-                            ? "bg-[#3a5a55]"
-                            : "bg-[#4a6a65]"
-                        }`}
-                      >
-                        <p className="text-white text-sm">{comment.message}</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {formatTime(comment.createdAt)}
-                        </p>
+                  {selectedIssue.comments &&
+                  selectedIssue.comments.length > 0 ? (
+                    selectedIssue.comments.map((comment) => (
+                      <div key={comment.id} className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-[#CD5B43] flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                          {comment.user.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1">
+                          <div className="bg-[#1a3a38] rounded-lg px-4 py-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-sm font-semibold text-white">
+                                {comment.user.name}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {formatTime(comment.createdAt)}
+                              </p>
+                            </div>
+                            <p className="text-white text-sm">
+                              {comment.content}
+                            </p>
+                          </div>
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-gray-400 py-8">
+                      No comments yet. Start the discussion!
                     </div>
-                  ))}
+                  )}
                 </div>
 
                 {/* Message Input */}
@@ -394,6 +687,126 @@ export default function IssuesPage() {
           )}
         </div>
       </div>
+
+      {/* Create Issue Modal */}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setCreateForm({
+            title: "",
+            description: "",
+            priority: "medium",
+            assignedToId: "",
+          });
+        }}
+        title="Create New Issue"
+      >
+        <form onSubmit={handleCreateIssue} className="space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-gray-200 mb-2">
+              Title *
+            </label>
+            <input
+              type="text"
+              value={createForm.title}
+              onChange={(e) =>
+                setCreateForm({ ...createForm, title: e.target.value })
+              }
+              className="w-full px-4 py-3 bg-[#0f2e2c]/50 border border-[#2a5a56] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all shadow-sm hover:bg-[#0f2e2c]/70"
+              placeholder="Enter issue title"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-200 mb-2">
+              Description
+            </label>
+            <textarea
+              value={createForm.description}
+              onChange={(e) =>
+                setCreateForm({ ...createForm, description: e.target.value })
+              }
+              className="w-full px-4 py-3 bg-[#0f2e2c]/50 border border-[#2a5a56] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all shadow-sm hover:bg-[#0f2e2c]/70 resize-none"
+              placeholder="Describe the issue (optional)"
+              rows={4}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-200 mb-2">
+              Priority *
+            </label>
+            <div className="relative">
+              <select
+                value={createForm.priority}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, priority: e.target.value })
+                }
+                className="w-full px-4 py-3 bg-[#0f2e2c]/50 border border-[#2a5a56] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all shadow-sm hover:bg-[#0f2e2c]/70 cursor-pointer appearance-none"
+              >
+                {priorityOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white pointer-events-none" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-200 mb-2">
+              Assign To
+            </label>
+            <div className="relative">
+              <select
+                value={createForm.assignedToId}
+                onChange={(e) =>
+                  setCreateForm({
+                    ...createForm,
+                    assignedToId: e.target.value,
+                  })
+                }
+                className="w-full px-4 py-3 bg-[#0f2e2c]/50 border border-[#2a5a56] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all shadow-sm hover:bg-[#0f2e2c]/70 cursor-pointer appearance-none"
+              >
+                <option value="">Unassigned</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white pointer-events-none" />
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-6">
+            <button
+              type="button"
+              onClick={() => {
+                setShowCreateModal(false);
+                setCreateForm({
+                  title: "",
+                  description: "",
+                  priority: "medium",
+                  assignedToId: "",
+                });
+              }}
+              className="flex-1 px-5 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all font-medium border border-white/10 hover:border-white/20 shadow-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-5 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg transition-all font-medium shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+            >
+              Create Issue
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

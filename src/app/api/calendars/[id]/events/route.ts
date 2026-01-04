@@ -70,8 +70,9 @@ export async function POST(
         description,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
-        tag,
+        tags: tag ? [tag] : [],
         calendarId: id,
+        createdById: session.user.id,
       },
     });
 
