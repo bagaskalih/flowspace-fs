@@ -19,7 +19,17 @@ export async function GET(
       where: { id },
       include: {
         board: {
-          select: { id: true, name: true, type: true },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            division: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
         },
         assignedTo: {
           select: { id: true, name: true, email: true, avatar: true },
@@ -84,7 +94,17 @@ export async function PUT(
       },
       include: {
         board: {
-          select: { id: true, name: true, type: true },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            division: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
         },
         assignedTo: {
           select: { id: true, name: true, email: true, avatar: true },

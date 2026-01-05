@@ -3,203 +3,330 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "../components/Sidebar";
+import {
+  CheckSquare,
+  User,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  AlertCircle,
+} from "lucide-react";
+
+interface Task {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  dueDate: string | null;
+  assignedTo: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+interface Division {
+  id: string;
+  name: string;
+  totalTasks: number;
+  completedTasks: number;
+}
 
 export default function Dashboard() {
   const router = useRouter();
   const [selectedMenu, setSelectedMenu] = useState("Home");
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
 
   useEffect(() => {
-    // Fetch current user
-    fetch("/api/auth/me")
-      .then((res) => {
-        if (!res.ok) {
-          router.push("/login");
-          return null;
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data?.user) {
-          setUser(data.user);
-        }
-        setLoading(false);
-      })
-      .catch(() => {
+    fetchUser();
+    fetchTasks();
+    fetchDivisions();
+  }, []);
+
+  const fetchUser = async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      if (!res.ok) {
         router.push("/login");
-      });
-
-    // Fetch upcoming events
-    fetch("/api/calendars")
-      .then((res) => res.json())
-      .then((calendars) => {
-        if (!Array.isArray(calendars)) return;
-
-        const allEvents: any[] = [];
-        calendars.forEach((cal: any) => {
-          if (cal.events) {
-            cal.events.forEach((event: any) => {
-              allEvents.push({
-                ...event,
-                calendarName: cal.name,
-              });
-            });
-          }
-        });
-
-        // Sort by date and take next 5 events
-        const upcoming = allEvents
-          .filter((e) => new Date(e.startDate) >= new Date())
-          .sort(
-            (a, b) =>
-              new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-          )
-          .slice(0, 5);
-
-        setUpcomingEvents(upcoming);
-      })
-      .catch(console.error);
-  }, [router]);
-
-  const formatEventDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const day = date.toLocaleDateString("en-US", { weekday: "short" });
-    const month = date.toLocaleDateString("en-US", { month: "short" });
-    const dayNum = date.getDate();
-    return { day, month, dayNum };
+        return;
+      }
+      const data = await res.json();
+      if (data?.user) {
+        setUser(data.user);
+      }
+    } catch (error) {
+      router.push("/login");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const formatEventTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
+  const fetchTasks = async () => {
+    try {
+      const res = await fetch("/api/tasks");
+      if (res.ok) {
+        const data = await res.json();
+        setTasks(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch tasks:", error);
+    }
+  };
+
+  const fetchDivisions = async () => {
+    try {
+      const res = await fetch("/api/divisions");
+      if (!res.ok) return;
+
+      const divisionsData = await res.json();
+
+      // Fetch tasks for each division to calculate completion
+      const tasksRes = await fetch("/api/tasks");
+      if (!tasksRes.ok) return;
+
+      const allTasks = await tasksRes.json();
+
+      const divisionStats = divisionsData.map((div: any) => {
+        const divTasks = allTasks.filter(
+          (task: any) =>
+            task.board?.type === "division" &&
+            task.board?.division?.id === div.id
+        );
+        const completed = divTasks.filter(
+          (task: any) => task.status === "done" || task.status === "closed"
+        ).length;
+
+        return {
+          id: div.id,
+          name: div.name,
+          totalTasks: divTasks.length,
+          completedTasks: completed,
+        };
+      });
+
+      // Add General
+      const generalTasks = allTasks.filter(
+        (task: any) => task.board?.type === "general"
+      );
+      const generalCompleted = generalTasks.filter(
+        (task: any) => task.status === "done" || task.status === "closed"
+      ).length;
+
+      setDivisions([
+        ...divisionStats,
+        {
+          id: "general",
+          name: "General",
+          totalTasks: generalTasks.length,
+          completedTasks: generalCompleted,
+        },
+      ]);
+    } catch (error) {
+      console.error("Failed to fetch divisions:", error);
+    }
+  };
+
+  const totalTasks = tasks.length;
+  const myTasks = tasks.filter(
+    (task) => task.assignedTo?.id === user?.id
+  ).length;
+  const inProgressTasks = tasks.filter(
+    (task) => task.status === "in_progress"
+  ).length;
+  const completedTasks = tasks.filter(
+    (task) => task.status === "done" || task.status === "closed"
+  ).length;
+  const urgentTasks = tasks.filter((task) => task.priority === "urgent").length;
+  const overdueTasks = tasks.filter(
+    (task) =>
+      task.dueDate &&
+      new Date(task.dueDate) < new Date() &&
+      task.status !== "done" &&
+      task.status !== "closed"
+  ).length;
+
+  const recentTasks = tasks.slice(0, 3);
+
+  const getPriorityBadge = (priority: string) => {
+    const colors = {
+      urgent: "bg-red-500/20 text-red-400",
+      high: "bg-orange-500/20 text-orange-400",
+      medium: "bg-yellow-500/20 text-yellow-400",
+      low: "bg-gray-500/20 text-gray-400",
+    };
+    return colors[priority as keyof typeof colors] || colors.medium;
+  };
+
+  const getProgressColor = (percentage: number) => {
+    if (percentage === 0) return "bg-gray-500";
+    if (percentage < 50) return "bg-blue-500";
+    if (percentage < 100) return "bg-yellow-500";
+    return "bg-green-500";
   };
 
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#1a3a38]">
-        <div className="text-lg text-[#E4E1B6]">Loading...</div>
+        <div className="text-lg text-white">Loading...</div>
       </div>
     );
   }
 
   return (
     <div className="flex h-screen bg-[#1a3a38]">
-      {/* Sidebar */}
       <Sidebar selectedMenu={selectedMenu} onMenuSelect={setSelectedMenu} />
 
-      {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-8">
         {/* Welcome Header */}
         <h1 className="text-4xl font-semibold text-white mb-8">
           Welcome {user?.name || "User"}
         </h1>
 
-        {/* Upcoming Events Section */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <svg
-              className="w-5 h-5 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            <h2 className="text-sm text-gray-400">Upcoming Events</h2>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-3 gap-6 mb-8">
+          {/* Total Tasks */}
+          <div className="bg-[#2a4a48] rounded-lg p-6 flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Total Tasks</p>
+              <p className="text-4xl font-bold text-white">{totalTasks}</p>
+            </div>
+            <div className="bg-blue-500/20 p-4 rounded-lg">
+              <CheckSquare className="h-8 w-8 text-blue-400" />
+            </div>
           </div>
 
-          <div className="bg-[#2a4a48] rounded-lg p-8">
-            <div className="flex gap-8">
-              {/* Left side - Illustration */}
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="flex items-center justify-center w-16 h-16 bg-[#1a3a38] rounded-lg">
-                    <svg
-                      className="w-8 h-8 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </div>
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">
-                  Sync Your Work Schedule
-                </h3>
-                <p className="text-gray-400 text-sm max-w-md">
-                  See all tasks and team events in one place — plan smarter,
-                  work better.
-                </p>
-              </div>
+          {/* My Tasks */}
+          <div className="bg-[#2a4a48] rounded-lg p-6 flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">My Tasks</p>
+              <p className="text-4xl font-bold text-white">{myTasks}</p>
+            </div>
+            <div className="bg-purple-500/20 p-4 rounded-lg">
+              <User className="h-8 w-8 text-purple-400" />
+            </div>
+          </div>
 
-              {/* Right side - Events list */}
-              <div className="w-80 space-y-4">
-                {upcomingEvents.length === 0 ? (
-                  <div className="text-gray-400 text-sm text-center py-8">
-                    No upcoming events
-                  </div>
-                ) : (
-                  upcomingEvents.map((event) => {
-                    const { day, month, dayNum } = formatEventDate(
-                      event.startDate
-                    );
-                    const time = formatEventTime(event.startDate);
-                    const isToday =
-                      new Date(event.startDate).toDateString() ===
-                      new Date().toDateString();
+          {/* In Progress */}
+          <div className="bg-[#2a4a48] rounded-lg p-6 flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">In Progress</p>
+              <p className="text-4xl font-bold text-white">{inProgressTasks}</p>
+            </div>
+            <div className="bg-yellow-500/20 p-4 rounded-lg">
+              <Clock className="h-8 w-8 text-yellow-400" />
+            </div>
+          </div>
 
-                    return (
-                      <div
-                        key={event.id}
-                        className="border-b border-[#355856] last:border-0 pb-4 last:pb-0"
+          {/* Completed */}
+          <div className="bg-[#2a4a48] rounded-lg p-6 flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Completed</p>
+              <p className="text-4xl font-bold text-white">{completedTasks}</p>
+            </div>
+            <div className="bg-green-500/20 p-4 rounded-lg">
+              <CheckCircle className="h-8 w-8 text-green-400" />
+            </div>
+          </div>
+
+          {/* Urgent */}
+          <div className="bg-[#2a4a48] rounded-lg p-6 flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Urgent</p>
+              <p className="text-4xl font-bold text-white">{urgentTasks}</p>
+            </div>
+            <div className="bg-red-500/20 p-4 rounded-lg">
+              <AlertTriangle className="h-8 w-8 text-red-400" />
+            </div>
+          </div>
+
+          {/* Overdue */}
+          <div className="bg-[#2a4a48] rounded-lg p-6 flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Overdue</p>
+              <p className="text-4xl font-bold text-white">{overdueTasks}</p>
+            </div>
+            <div className="bg-orange-500/20 p-4 rounded-lg">
+              <AlertCircle className="h-8 w-8 text-orange-400" />
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Section - Recent Tasks and Division Overview */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* Recent Tasks */}
+          <div className="bg-[#2a4a48] rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-white mb-6">
+              Recent Tasks
+            </h2>
+            <div className="space-y-4">
+              {recentTasks.length === 0 ? (
+                <p className="text-gray-400 text-center py-8">No tasks yet</p>
+              ) : (
+                recentTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="bg-[#1a3a38] rounded-lg p-4 hover:bg-[#234543] transition-colors cursor-pointer"
+                    onClick={() => router.push(`/dashboard/tasks/${task.id}`)}
+                  >
+                    <h3 className="text-white font-medium mb-2">
+                      {task.title}
+                    </h3>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-400">
+                        Assigned to {task.assignedTo?.name || "Unassigned"}
+                      </p>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${getPriorityBadge(
+                          task.priority
+                        )}`}
                       >
-                        <div className="flex items-start gap-4">
-                          <div className="text-left">
-                            <div className="text-xs text-gray-400">
-                              {isToday ? "Today" : day}
-                            </div>
-                            <div className="text-sm text-white">
-                              {month} {dayNum}
-                            </div>
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="text-white font-medium mb-1">
-                              {event.title}
-                            </h4>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400">
-                                {time}
-                              </span>
-                              {event.tags && event.tags[0] && (
-                                <span className="px-2 py-0.5 text-xs bg-teal-500/20 text-teal-300 rounded">
-                                  {event.tags[0]}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                        {task.priority}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Division Overview */}
+          <div className="bg-[#2a4a48] rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-white mb-6">
+              Division Overview
+            </h2>
+            <div className="space-y-6">
+              {divisions.map((division) => {
+                const percentage =
+                  division.totalTasks > 0
+                    ? Math.round(
+                        (division.completedTasks / division.totalTasks) * 100
+                      )
+                    : 0;
+
+                return (
+                  <div key={division.id}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-white font-medium">
+                        {division.name}
+                      </span>
+                      <span className="text-sm text-gray-400">
+                        {division.completedTasks}/{division.totalTasks}{" "}
+                        Completed
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${getProgressColor(
+                          percentage
+                        )}`}
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

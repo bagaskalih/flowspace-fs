@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Sidebar from "../../../components/Sidebar";
-import { ArrowLeft, AlertCircle, User, Send } from "lucide-react";
+import Modal from "../../../components/Modal";
+import { ArrowLeft, AlertCircle, User, Send, Trash2 } from "lucide-react";
 
 interface Comment {
   id: string;
@@ -46,6 +47,8 @@ export default function IssueDetailPage() {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -109,6 +112,27 @@ export default function IssueDetailPage() {
     }
   };
 
+  const handleDeleteIssue = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/issues/${params.id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        router.push("/dashboard/issues");
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete issue");
+      }
+    } catch (err) {
+      alert("An error occurred while deleting the issue");
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "high":
@@ -159,13 +183,23 @@ export default function IssueDetailPage() {
 
       <div className="flex-1 overflow-y-auto p-8">
         {/* Header */}
-        <button
-          onClick={() => router.push("/dashboard/issues")}
-          className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Issues
-        </button>
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => router.push("/dashboard/issues")}
+            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Issues
+          </button>
+
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </button>
+        </div>
 
         {/* Issue Details Card */}
         <div className="bg-[#2a4a48] rounded-lg p-6 mb-6">
@@ -335,6 +369,38 @@ export default function IssueDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        title="Delete Issue"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-900">
+            Are you sure you want to delete this issue? This action cannot be
+            undone.
+          </p>
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(false)}
+              className="flex-1 px-4 py-2 bg-white border border-gray-300 text-gray-900 rounded-md hover:bg-gray-50 transition-colors"
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteIssue}
+              disabled={deleting}
+              className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

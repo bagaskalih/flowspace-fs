@@ -19,9 +19,8 @@ export async function GET(
       where: { id },
       include: {
         division: {
-          select: { id: true, name: true, email: true, avatar: true },
+          select: { id: true, name: true },
         },
-        division: { select: { id: true, name: true } },
         events: {
           orderBy: { startDate: "asc" },
         },
@@ -69,13 +68,10 @@ export async function DELETE(
       );
     }
 
-    // Only creator or admin/master can delete
-    if (
-      calendar.createdById !== session.user.id &&
-      !["admin", "master"].includes(session.user.role)
-    ) {
+    // Only admin/master can delete
+    if (!["admin", "master"].includes(session.user.role)) {
       return NextResponse.json(
-        { error: "Only calendar creator or admin can delete" },
+        { error: "Only admin can delete calendars" },
         { status: 403 }
       );
     }

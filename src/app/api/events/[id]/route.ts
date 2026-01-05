@@ -34,7 +34,7 @@ export async function PUT(
         startDate:
           startDate !== undefined ? new Date(startDate) : event.startDate,
         endDate: endDate !== undefined ? new Date(endDate) : event.endDate,
-        tags: tag !== undefined ? (tag ? [tag] : []) ? tag : event.tags,
+        tags: tag !== undefined ? (tag ? [tag] : []) : event.tags,
       },
     });
 

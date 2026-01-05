@@ -24,7 +24,7 @@ export async function PATCH(
       );
     }
 
-    const validStatuses = ["todo", "in_progress", "review", "done"];
+    const validStatuses = ["todo", "in_progress", "review", "done", "closed"];
     if (!validStatuses.includes(status)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }

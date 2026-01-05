@@ -32,7 +32,7 @@ export default function Sidebar({ selectedMenu, onMenuSelect }: SidebarProps) {
   }
 
   const bottomMenuItems = [
-    { name: "Settings", icon: "settings", path: "/dashboard/settings" },
+    // { name: "Settings", icon: "settings", path: "/dashboard/settings" },
     { name: "Logout", icon: "logout", path: "" },
   ];
 
